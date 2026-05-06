@@ -383,7 +383,7 @@ public class TenderController {
                     .requestedBy(requestedBy)
                     .build();
 
-            kafkaTemplate.send("evaluation-jobs", bidder.getBidderRef(), message);
+            kafkaTemplate.send("tenderlens-evaluation-jobs", bidder.getBidderRef(), message);
             queued++;
             log.info("Queued evaluation job for bidder {} (tender {})", bidder.getBidderRef(), tender.getTenderRef());
         }

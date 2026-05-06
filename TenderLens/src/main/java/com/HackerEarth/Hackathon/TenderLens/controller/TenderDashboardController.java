@@ -33,9 +33,6 @@ public class TenderDashboardController {
 
     // ── Summary stats ─────────────────────────────────────────────────────────
 
-    /**
-     * Top-level stats for the React dashboard cards.
-     */
     @GetMapping("/stats")
     public ResponseEntity<?> getStats() {
         List<Tender> allTenders = tenderRepository.findAllByOrderByCreatedAtDesc();
@@ -49,10 +46,10 @@ public class TenderDashboardController {
                 .filter(t -> "COMPLETED".equals(t.getStatus()))
                 .count();
 
-        long totalBidders     = bidderRepository.count();
-        long parsedBidders    = bidderRepository.findAll().stream()
+        long totalBidders   = bidderRepository.count();
+        long parsedBidders  = bidderRepository.findAll().stream()
                 .filter(b -> "PARSED".equals(b.getParseStatus())).count();
-        long pendingBidders   = bidderRepository.findAll().stream()
+        long pendingBidders = bidderRepository.findAll().stream()
                 .filter(b -> "PENDING".equals(b.getParseStatus())
                         || "PARSING".equals(b.getParseStatus())).count();
 
@@ -64,7 +61,8 @@ public class TenderDashboardController {
         long needsReviewCount = evaluationRepository.findAll().stream()
                 .filter(e -> "NEEDS_REVIEW".equals(e.getVerdict())).count();
 
-        long pendingReviews   = reviewQueueRepository.countByReviewedFalse();
+        // countByReviewedFalse — exists in ReviewQueueRepository
+        long pendingReviews = reviewQueueRepository.countByReviewedFalse();
 
         return ResponseEntity.ok(Map.of(
                 "tenders", Map.of(
@@ -91,19 +89,11 @@ public class TenderDashboardController {
 
     // ── Audit event feed ──────────────────────────────────────────────────────
 
-    /**
-     * Latest audit events across all tenders — used for the live feed panel
-     * in the React dashboard. Returns most recent 50 events.
-     */
     @GetMapping("/audit/feed")
     public ResponseEntity<?> getAuditFeed(
             @RequestParam(value = "limit", defaultValue = "50") int limit) {
 
-        // Fetch all audit logs, sorted desc by createdAt, limit client-side
-        List<TenderAuditLog> allLogs = auditLogRepository
-                .findByActionOrderByCreatedAtDesc("CRITERION_EXTRACTED");
-
-        // For a proper feed, we just get all and sort — no pagination needed for demo
+        // TenderAuditLog.createdAt is the timestamp field (set in @PrePersist)
         List<TenderAuditLog> feed = auditLogRepository.findAll()
                 .stream()
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
@@ -118,9 +108,6 @@ public class TenderDashboardController {
 
     // ── Compact tender list for sidebar ──────────────────────────────────────
 
-    /**
-     * Compact list of all tenders with status — for the React sidebar/dropdown.
-     */
     @GetMapping("/tenders/list")
     public ResponseEntity<?> getTenderList() {
         List<Tender> tenders = tenderRepository.findAllByOrderByCreatedAtDesc();
@@ -128,17 +115,18 @@ public class TenderDashboardController {
         List<Map<String, Object>> list = tenders.stream().map(t -> {
             long bidderCount   = bidderRepository.countByTenderId(t.getId());
             long criteriaCount = criterionRepository.countByTenderId(t.getId());
+            // findPendingByTenderId exists in ReviewQueueRepository via @Query
             long pendingReview = reviewQueueRepository.findPendingByTenderId(t.getId()).size();
 
             return Map.<String, Object>of(
-                    "id", t.getId(),
-                    "tenderRef", t.getTenderRef(),
-                    "title", t.getTitle(),
-                    "status", t.getStatus(),
-                    "uploadedBy", t.getUploadedBy(),
-                    "createdAt", t.getCreatedAt(),
-                    "bidderCount", bidderCount,
-                    "criteriaCount", criteriaCount,
+                    "id",             t.getId(),
+                    "tenderRef",      t.getTenderRef(),
+                    "title",          t.getTitle(),
+                    "status",         t.getStatus(),
+                    "uploadedBy",     t.getUploadedBy(),
+                    "createdAt",      t.getCreatedAt(),
+                    "bidderCount",    bidderCount,
+                    "criteriaCount",  criteriaCount,
                     "pendingReviews", pendingReview
             );
         }).toList();
@@ -152,13 +140,14 @@ public class TenderDashboardController {
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private Map<String, Object> toFeedEntry(TenderAuditLog log) {
+        // TenderAuditLog fields: tenderId, action, detail, performedBy, createdAt
         return Map.of(
-                "id", log.getId(),
-                "tenderId", log.getTenderId(),
-                "action", log.getAction(),
-                "detail", log.getDetail() != null ? log.getDetail() : "",
+                "id",          log.getId(),
+                "tenderId",    log.getTenderId(),
+                "action",      log.getAction(),
+                "detail",      log.getDetail() != null ? log.getDetail() : "",
                 "performedBy", log.getPerformedBy() != null ? log.getPerformedBy() : "SYSTEM",
-                "createdAt", log.getCreatedAt()
+                "createdAt",   log.getCreatedAt()
         );
     }
 }

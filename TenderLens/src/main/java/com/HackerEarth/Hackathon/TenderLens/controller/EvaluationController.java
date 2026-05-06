@@ -61,13 +61,13 @@ public class EvaluationController {
         if (tender == null) return ResponseEntity.notFound().build();
 
         List<Bidder> bidders = bidderRepository.findByTenderIdOrderByCompanyName(id);
-        List<Criterion> criteria = criterionRepository.findByTenderIdAndConfirmedByOfficerTrue(id);
+        List<Criterion> criteria = criterionRepository.findByTenderIdOrderByCriterionRef(id).stream().filter(c -> c.isConfirmedByOfficer()).toList();
 
         List<BidderEvaluationSummary> summaries = new ArrayList<>();
 
         for (Bidder bidder : bidders) {
             List<Evaluation> evals = evaluationRepository
-                    .findByTenderIdAndBidderIdOrderByCriterionId(tender.getId(), bidder.getId());
+                    .findByTenderIdOrderByBidderIdAscCriterionIdAsc(tender.getId()).stream().filter(e -> e.getBidder().getId().equals(bidder.getId())).toList();
 
             List<EvaluationResult> results = evals.stream().map(this::toResult).collect(Collectors.toList());
 
@@ -131,7 +131,7 @@ public class EvaluationController {
         if (bidder == null) return ResponseEntity.notFound().build();
 
         List<Evaluation> evals = evaluationRepository
-                .findByTenderIdAndBidderIdOrderByCriterionId(id, bidderId);
+                .findByTenderIdOrderByBidderIdAscCriterionIdAsc(id).stream().filter(e -> e.getBidder().getId().equals(bidderId)).toList();
 
         List<EvaluationResult> results = evals.stream().map(this::toResult).collect(Collectors.toList());
 
@@ -170,7 +170,7 @@ public class EvaluationController {
         Tender tender = tenderRepository.findById(id).orElse(null);
         if (tender == null) return ResponseEntity.notFound().build();
 
-        List<Criterion> criteria = criterionRepository.findByTenderIdAndConfirmedByOfficerTrue(id);
+        List<Criterion> criteria = criterionRepository.findByTenderIdOrderByCriterionRef(id).stream().filter(c -> c.isConfirmedByOfficer()).toList();
         List<Bidder> bidders = bidderRepository.findByTenderIdOrderByCompanyName(id);
         List<Evaluation> allEvals = evaluationRepository.findByTenderIdOrderByBidderIdAscCriterionIdAsc(id);
 
@@ -301,14 +301,15 @@ public class EvaluationController {
                 .extractedValue(e.getExtractedValue())
                 .verbatimExcerpt(e.getVerbatimExcerpt())
                 .sourcePage(e.getSourcePage())
-                .sourceDocument(e.getSourceDocument())
+                //.sourceDocument(e.getSourceDocument())
                 .verdict(e.getVerdict())
                 .confidenceScore(e.getConfidenceScore())
                 .ocrQualityFlag(e.isOcrQualityFlag())
-                .llmCallId(e.getLlmCallId())
+                //.llmCallId(e.getLlmCallId())
                 .reviewReason(e.getReviewReason())
                 .build();
     }
+
 
 
 }

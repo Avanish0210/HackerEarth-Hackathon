@@ -94,19 +94,19 @@ ubid:
     departments:
       - id: DEPT_A
         name: "Revenue Department"
-        base-url: http://localhost:8080/mock/dept-a
+        base-url: http://localhost:8080/api/ubid/mock/dept-a
         integration-type: WEBHOOK    # WEBHOOK | POLLING | SNAPSHOT
         translator: revenue
 
       - id: DEPT_B
         name: "Municipal Corporation"
-        base-url: http://localhost:8080/mock/dept-b
+        base-url: http://localhost:8080/api/ubid/mock/dept-b
         integration-type: POLLING
         translator: municipal
 
       - id: DEPT_C
         name: "Utility Department"
-        base-url: http://localhost:8080/mock/dept-c
+        base-url: http://localhost:8080/api/ubid/mock/dept-c
         integration-type: SNAPSHOT
         translator: utility
 

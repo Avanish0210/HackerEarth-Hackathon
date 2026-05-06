@@ -3,6 +3,7 @@ package com.HackerEarth.Hackathon.ubidbridge.service;
 
 import com.HackerEarth.Hackathon.ubidbridge.dto.PropagationTask;
 import com.HackerEarth.Hackathon.ubidbridge.dto.SwsEvent;
+import com.HackerEarth.Hackathon.ubidbridge.config.UbidBridgeProperties;
 import com.HackerEarth.Hackathon.ubidbridge.entity.DepartmentRegistry;
 import com.HackerEarth.Hackathon.ubidbridge.repository.DepartmentRegistryRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class EventRouter {
     private final TranslatorRegistry           translatorRegistry;
     private final IdempotencyService           idempotencyService;
     private final AuditService                 auditService;
+    private final UbidBridgeProperties         properties;
     private final KafkaTemplate<String, PropagationTask> kafkaTemplate;
 
     private static final String TOPIC_PROPAGATION = "ubid-propagation-tasks";
@@ -48,8 +50,9 @@ public class EventRouter {
                 departmentRegistryRepository.findByUbidAndActiveTrue(event.getUbid());
 
         if (departments.isEmpty()) {
-            log.warn("No departments registered for UBID: {}", event.getUbid());
-            return;
+            log.info("No departments registered for UBID: {}, auto-registering demo departments",
+                    event.getUbid());
+            departments = registerDemoDepartments(event.getUbid());
         }
 
         log.info("Fanning out to {} departments for UBID: {}",
@@ -59,6 +62,31 @@ public class EventRouter {
         for (DepartmentRegistry dept : departments) {
             fanOutToDepartment(event, dept);
         }
+    }
+
+    private List<DepartmentRegistry> registerDemoDepartments(String ubid) {
+        if (properties.getDepartments() == null || properties.getDepartments().isEmpty()) {
+            log.warn("No configured demo departments available for UBID: {}", ubid);
+            return List.of();
+        }
+
+        for (UbidBridgeProperties.Department dept : properties.getDepartments()) {
+            if (departmentRegistryRepository.existsByUbidAndDepartmentId(ubid, dept.getId())) {
+                continue;
+            }
+
+            DepartmentRegistry registry = DepartmentRegistry.builder()
+                    .ubid(ubid)
+                    .departmentId(dept.getId())
+                    .departmentName(dept.getName())
+                    .integrationType(dept.getIntegrationType())
+                    .active(true)
+                    .build();
+
+            departmentRegistryRepository.save(registry);
+        }
+
+        return departmentRegistryRepository.findByUbidAndActiveTrue(ubid);
     }
 
     private void fanOutToDepartment(SwsEvent event, DepartmentRegistry dept) {

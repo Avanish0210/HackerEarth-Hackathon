@@ -1,6 +1,7 @@
 package com.HackerEarth.Hackathon.TenderLens.repository;
 
 import com.HackerEarth.Hackathon.TenderLens.entity.TenderAuditLog;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

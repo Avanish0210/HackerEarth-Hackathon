@@ -33,10 +33,10 @@ public class PropagationConsumer {
 
     // Department base URLs — in real system injected from config
     private static final Map<String, String> DEPT_URLS = Map.of(
-            "DEPT_A", "http://localhost:8080/mock/dept-a/update",
-            "DEPT_B", "http://localhost:8080/mock/dept-b/update",
-            "DEPT_C", "http://localhost:8080/mock/dept-c/update",
-            "SWS",    "http://localhost:8080/mock/sws/update"
+            "DEPT_A", "http://localhost:8080/api/ubid/mock/dept-a/update",
+            "DEPT_B", "http://localhost:8080/api/ubid/mock/dept-b/update",
+            "DEPT_C", "http://localhost:8080/api/ubid/mock/dept-c/update",
+            "SWS",    "http://localhost:8080/api/ubid/mock/sws/update"
     );
 
     @KafkaListener(
