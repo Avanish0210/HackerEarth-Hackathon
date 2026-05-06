@@ -1,0 +1,129 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/ubid
+
+spring:
+  application:
+    name: ubid-bridge
+
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hackathon_db
+    username: postgres
+    password: avanish7080
+    driver-class-name:
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  # ── Kafka ─────────────────────────────────────────────────────
+  kafka:
+    bootstrap-servers: localhost:9092
+    admin:
+      fail-fast: false          # ← don't fail if Kafka unreachable on startup
+    listener:
+      ack-mode: MANUAL_IMMEDIATE
+      missing-topics-fatal: false
+    consumer:
+      group-id: ubid-bridge-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.hackerearth.hackathon.ubidbridge.*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      retries: 3
+      properties:
+        enable.idempotence: true
+        acks: all
+
+
+  jpa:
+    hibernate:
+      ddl-auto: update          # schema managed by init.sql, not Hibernate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+
+    # ── Redis ─────────────────────────────────────────────────────
+    data:
+      redis:
+        host: localhost
+        port: 6379
+        password:                   # leave blank if no auth
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 10
+            max-idle: 5
+            min-idle: 1
+
+
+
+# ── UBID Bridge custom config ──────────────────────────────────
+ubid:
+  bridge:
+    # Idempotency key TTL in Redis (seconds) — 7 days
+    idempotency-ttl-seconds: 604800
+
+    # Conflict detection window (milliseconds) — 30 seconds
+    conflict-window-ms: 30000
+
+    # Default conflict resolution policy: LAST_WRITE_WINS | SOURCE_PRIORITY | MANUAL_ESCALATION
+    default-conflict-policy: LAST_WRITE_WINS
+
+    # Retry config for failed department writes
+    retry:
+      max-attempts: 5
+      initial-interval-ms: 1000
+      multiplier: 2.0
+      max-interval-ms: 30000
+
+    # Department poller interval (cron — every 60 seconds)
+    poller:
+      cron: "0/60 * * * * *"
+
+    # Mock department systems base URLs (same JVM, different endpoints)
+    departments:
+      - id: DEPT_A
+        name: "Revenue Department"
+        base-url: http://localhost:8080/mock/dept-a
+        integration-type: WEBHOOK    # WEBHOOK | POLLING | SNAPSHOT
+        translator: revenue
+
+      - id: DEPT_B
+        name: "Municipal Corporation"
+        base-url: http://localhost:8080/mock/dept-b
+        integration-type: POLLING
+        translator: municipal
+
+      - id: DEPT_C
+        name: "Utility Department"
+        base-url: http://localhost:8080/mock/dept-c
+        integration-type: SNAPSHOT
+        translator: utility
+
+# ── Actuator ──────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, kafka
+  endpoint:
+    health:
+      show-details: always
+
+# ── Logging ───────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.hackerearth.hackathon.ubidbridge: DEBUG
+    org.springframework.kafka: WARN
+    org.hibernate.SQL: WARN

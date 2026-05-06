@@ -1,0 +1,231 @@
+networks:
+  hackathon-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  ollama_data:
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: hackathon-postgres
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hackathon_db
+      POSTGRES_USER: hackathon_user
+      POSTGRES_PASSWORD: hackathon_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hackathon_user -d hackathon_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: hackathon-redis
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Zookeeper ─────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: hackathon-zookeeper
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_ADMIN_ENABLE_SERVER: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "cub zk-ready localhost:2181 30 || exit 1"]
+      interval: 15s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: hackathon-kafka
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "9092:9092"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "cub kafka-ready -b localhost:9092 1 30 || exit 1"]
+      interval: 15s
+      timeout: 30s
+      retries: 10
+      start_period: 40s
+
+  # ── Kafka UI ──────────────────────────────────────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: hackathon-kafka-ui
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "9090:8080"
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: hackathon
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+  # ── Ollama ─────────────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hackathon-ollama
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # ── Ollama model pull ──────────────────────────────────────────────────────
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: hackathon-ollama-pull
+    networks:
+      - hackathon-net
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "ollama pull llama3.2"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    restart: "no"
+
+  # ── UBID Bridge ────────────────────────────────────────────────────────────
+  ubid-bridge:
+    build:
+      context: ./ubid-bridge
+      dockerfile: Dockerfile
+    container_name: hackathon-ubid-bridge
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/hackathon_db
+      SPRING_DATASOURCE_USERNAME: hackathon_user
+      SPRING_DATASOURCE_PASSWORD: hackathon_pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/ubid/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── TenderLens ─────────────────────────────────────────────────────────────
+  tenderlens:
+    build:
+      context: ./tenderlens
+      dockerfile: Dockerfile
+    container_name: hackathon-tenderlens
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/hackathon_db
+      SPRING_DATASOURCE_USERNAME: hackathon_user
+      SPRING_DATASOURCE_PASSWORD: hackathon_pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_AI_OLLAMA_BASE_URL: http://ollama:11434
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/api/tenderlens/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── React Frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hackathon-frontend
+    restart: unless-stopped
+    networks:
+      - hackathon-net
+    ports:
+      - "3000:80"
+    depends_on:
+      - ubid-bridge
+      - tenderlens
