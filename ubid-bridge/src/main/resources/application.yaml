@@ -9,10 +9,10 @@ spring:
 
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/hackathon_db
-    username: postgres
-    password: avanish7080
-    driver-class-name:
+    url: jdbc:postgresql://postgres:5432/hackathon_db
+    username: hackathon_user
+    password: hackathon_pass
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -20,7 +20,7 @@ spring:
 
   # ── Kafka ─────────────────────────────────────────────────────
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:29092
     admin:
       fail-fast: false          # ← don't fail if Kafka unreachable on startup
     listener:
@@ -51,19 +51,18 @@ spring:
         format_sql: true
     open-in-view: false
 
-
-    # ── Redis ─────────────────────────────────────────────────────
-    data:
-      redis:
-        host: localhost
-        port: 6379
-        password:                   # leave blank if no auth
-        timeout: 5000ms
-        lettuce:
-          pool:
-            max-active: 10
-            max-idle: 5
-            min-idle: 1
+  # ── Redis ─────────────────────────────────────────────────────
+  data:
+    redis:
+      host: hackathon-redis
+      port: 6379
+      password:                   # leave blank if no auth
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 5
+          min-idle: 1
 
 
 

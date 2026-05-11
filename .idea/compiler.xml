@@ -10,10 +10,12 @@
         <processorPath useClasspath="false">
           <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.46/lombok-1.18.46.jar" />
         </processorPath>
-        <module name="TenderLens" />
         <module name="ubid-bridge" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="TenderLens" target="21" />
+    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
